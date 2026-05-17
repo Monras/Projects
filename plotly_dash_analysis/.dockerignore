@@ -1,0 +1,22 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+projenv/
+
+# VCS and editor files
+.git/
+.gitignore
+.vscode/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Notebook and OS clutter
+.ipynb_checkpoints/
+.DS_Store

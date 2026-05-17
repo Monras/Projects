@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from dash import Dash, Input, Output, dcc, html
 
 from src.analysis import build_correlation_table, compute_summary_metrics
@@ -103,4 +105,8 @@ def update_main_chart(selected_variable: str, selected_chart_type: str):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(
+        debug=os.getenv("DASH_DEBUG", "false").lower() == "true",
+        host=os.getenv("DASH_HOST", "0.0.0.0"),
+        port=int(os.getenv("DASH_PORT", "8050")),
+    )

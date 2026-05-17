@@ -41,6 +41,38 @@ Open the app at:
 
 http://127.0.0.1:8050/
 
+## Docker quick start
+
+Run from the `plotly_dash_analysis` folder:
+
+```bash
+docker compose up --build
+```
+
+Open the app at:
+
+http://127.0.0.1:8050/
+
+Stop containers with:
+
+```bash
+docker compose down
+```
+
+### Useful Docker commands
+
+Rebuild from scratch:
+
+```bash
+docker compose build --no-cache
+```
+
+Run in detached mode:
+
+```bash
+docker compose up -d
+```
+
 ## How to use the dashboard
 
 1. Select a variable from the Variable dropdown.

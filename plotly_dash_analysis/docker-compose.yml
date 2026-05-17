@@ -1,0 +1,14 @@
+services:
+  dashboard:
+    build:
+      context: .
+    container_name: plotly_dash_dashboard
+    ports:
+      - "8050:8050"
+    environment:
+      DASH_HOST: 0.0.0.0
+      DASH_PORT: 8050
+      DASH_DEBUG: "false"
+    volumes:
+      - ./:/app
+    command: python app.py
