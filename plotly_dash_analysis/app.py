@@ -4,31 +4,63 @@ import os
 
 from dash import Dash, Input, Output, dcc, html
 
-from src.analysis import build_correlation_table, compute_summary_metrics
-from src.charts import correlation_heatmap, time_series_chart
-from src.data_loader import load_or_create_data
+from src.charts import budget_timeseries_chart, income_expense_comparison_chart
+from src.personal_budget_analysis import (
+    build_derived_budget_series,
+    compute_budget_summary,
+    load_personal_budget,
+)
 
+budget_available = True
+budget_error = ""
+budget_chart_df = None
+budget_summary: dict[str, float | str] = {}
+budget_variable_options: list[dict[str, str]] = []
 
-df = load_or_create_data()
-summary = compute_summary_metrics(df)
-corr_table = build_correlation_table(df)
+try:
+    budget_monthly = load_personal_budget().reset_index()
+    budget_derived = build_derived_budget_series(budget_monthly)
+    budget_summary = compute_budget_summary(budget_derived.set_index("date"))
+    budget_chart_df = budget_derived
 
-variable_options = [
-    {"label": "GDP Growth (%)", "value": "gdp_growth_pct"},
-    {"label": "Inflation (%)", "value": "inflation_pct"},
-    {"label": "Unemployment (%)", "value": "unemployment_pct"},
-    {"label": "Market Index", "value": "market_index"},
-    {"label": "Industrial Output", "value": "industrial_output"},
-]
+    candidate_budget_vars = [
+        "Inkomst",
+        "Utgifter",
+        "net_cashflow",
+        "Sparande",
+        "totalt innehav",
+        "known_liabilities",
+    ]
+    budget_variable_options = [
+        {"label": col.replace("_", " ").title(), "value": col}
+        for col in candidate_budget_vars
+        if col in budget_chart_df.columns
+    ]
+except Exception as exc:  # pragma: no cover - defensive app startup fallback
+    budget_available = False
+    budget_error = str(exc)
 
-chart_type_options = [
+budget_chart_type_options = [
     {"label": "Line", "value": "line"},
-    {"label": "Scatter", "value": "scatter"},
-    {"label": "Histogram", "value": "histogram"},
+    {"label": "Bar", "value": "bar"},
+    {"label": "Area", "value": "area"},
 ]
+
+
+def _fmt_sek(value: float | str | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{float(value):,.0f} SEK"
+
+
+def _fmt_pct(value: float | str | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{float(value):.2f}%"
+
 
 app = Dash(__name__)
-app.title = "Scientific and Economic Dashboard"
+app.title = "Personal Budget Dashboard"
 
 app.layout = html.Div(
     className="page",
@@ -36,48 +68,61 @@ app.layout = html.Div(
         html.Header(
             className="header",
             children=[
-                html.H1("Scientific and Economic Analysis Dashboard"),
-                html.P("Interactive analysis with Plotly + Dash"),
+                html.H1("Personal Budget Analysis Dashboard"),
+                html.P("Interactive budget tracking with Plotly + Dash"),
             ],
         ),
         html.Section(
             className="metrics-grid",
-            children=[
-                html.Div([
-                    html.H3("GDP Growth"),
-                    html.P(f"{summary['latest_gdp_growth']:.2f}%")
-                ], className="metric-card"),
-                html.Div([
-                    html.H3("Inflation"),
-                    html.P(f"{summary['latest_inflation']:.2f}%")
-                ], className="metric-card"),
-                html.Div([
-                    html.H3("Unemployment"),
-                    html.P(f"{summary['latest_unemployment']:.2f}%")
-                ], className="metric-card"),
-                html.Div([
-                    html.H3("Market 12M Change"),
-                    html.P(f"{summary['market_index_change_12m']:.2f}%")
-                ], className="metric-card"),
-            ],
+            children=(
+                [
+                    html.Div([
+                        html.H3("Latest Income"),
+                        html.P(_fmt_sek(budget_summary.get("latest_income"))),
+                    ], className="metric-card"),
+                    html.Div([
+                        html.H3("Latest Expenses"),
+                        html.P(_fmt_sek(budget_summary.get("latest_expenses"))),
+                    ], className="metric-card"),
+                    html.Div([
+                        html.H3("12M Savings Rate"),
+                        html.P(_fmt_pct(budget_summary.get("savings_rate_12m_avg_pct"))),
+                    ], className="metric-card"),
+                    html.Div([
+                        html.H3("12M Holdings Change"),
+                        html.P(_fmt_pct(budget_summary.get("net_worth_12m_change_pct"))),
+                    ], className="metric-card"),
+                ]
+                if budget_available
+                else [
+                    html.Div([
+                        html.H3("Personal Budget Data"),
+                        html.P(f"Could not load budget file: {budget_error}"),
+                    ], className="metric-card")
+                ]
+            ),
         ),
         html.Section(
             className="controls",
             children=[
                 html.Div([
-                    html.Label("Variable"),
+                    html.Label("Budget Variable"),
                     dcc.Dropdown(
-                        id="variable-dropdown",
-                        options=variable_options,
-                        value="gdp_growth_pct",
+                        id="budget-variable-dropdown",
+                        options=budget_variable_options,
+                        value=(
+                            budget_variable_options[0]["value"]
+                            if budget_variable_options
+                            else None
+                        ),
                         clearable=False,
                     ),
                 ]),
                 html.Div([
                     html.Label("Chart Type"),
                     dcc.RadioItems(
-                        id="chart-type-radio",
-                        options=chart_type_options,
+                        id="budget-chart-type-radio",
+                        options=budget_chart_type_options,
                         value="line",
                         inline=True,
                     ),
@@ -87,8 +132,15 @@ app.layout = html.Div(
         html.Section(
             className="chart-grid",
             children=[
-                dcc.Graph(id="main-chart"),
-                dcc.Graph(id="correlation-chart", figure=correlation_heatmap(corr_table)),
+                dcc.Graph(id="budget-main-chart"),
+                dcc.Graph(
+                    id="budget-income-expense-chart",
+                    figure=(
+                        income_expense_comparison_chart(budget_chart_df)
+                        if budget_available and budget_chart_df is not None
+                        else None
+                    ),
+                ),
             ],
         ),
     ],
@@ -96,12 +148,22 @@ app.layout = html.Div(
 
 
 @app.callback(
-    Output("main-chart", "figure"),
-    Input("variable-dropdown", "value"),
-    Input("chart-type-radio", "value"),
+    Output("budget-main-chart", "figure"),
+    Input("budget-variable-dropdown", "value"),
+    Input("budget-chart-type-radio", "value"),
 )
-def update_main_chart(selected_variable: str, selected_chart_type: str):
-    return time_series_chart(df, selected_variable, selected_chart_type)
+def update_budget_chart(selected_variable: str | None, selected_chart_type: str):
+    if budget_chart_df is None:
+        return budget_timeseries_chart(
+            load_personal_budget().reset_index(),
+            "totalt innehav",
+            "line",
+        )
+
+    if not selected_variable or selected_variable not in budget_chart_df.columns:
+        selected_variable = "totalt innehav"
+
+    return budget_timeseries_chart(budget_chart_df, selected_variable, selected_chart_type)
 
 
 if __name__ == "__main__":

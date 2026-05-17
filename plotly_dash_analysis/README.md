@@ -100,6 +100,29 @@ Notes:
 - date should be parseable as a date (for example YYYY-MM-DD).
 - Numeric columns should not contain text values.
 
+## Personal budget analysis (.ods)
+
+This repository also supports analysis of your raw personal budget file:
+
+- `data/raw/Summering Personlig budget.ods`
+
+Run from the `plotly_dash_analysis` folder:
+
+```bash
+python analyze_personal_budget.py
+```
+
+Outputs are written to:
+
+- `data/processed/personal_budget_timeseries.csv`
+- `data/processed/personal_budget_analysis.md`
+
+The analysis computes monthly cash-flow and wealth indicators such as:
+
+- income, expenses, and net cash flow
+- savings rate
+- total holdings trend (12-month change)
+
 ## Extending the project
 
 - Add new metrics in src/analysis.py.

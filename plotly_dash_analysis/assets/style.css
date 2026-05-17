@@ -44,6 +44,20 @@ body {
   opacity: 0.9;
 }
 
+.tab {
+  border: none !important;
+  background: #e2e8f0 !important;
+  color: #1e293b !important;
+  font-weight: 700;
+  border-radius: 10px 10px 0 0 !important;
+  margin-right: 8px !important;
+}
+
+.tab--selected {
+  background: #0a9396 !important;
+  color: #fff !important;
+}
+
 .metrics-grid {
   margin-top: 18px;
   display: grid;
