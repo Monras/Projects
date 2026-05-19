@@ -1,3 +1,8 @@
+"""Visualization utilities for creating Plotly charts.
+
+Provides functions for generating time series, correlation heatmaps,
+and budget analysis charts for the dashboard.
+"""
 from __future__ import annotations
 
 import pandas as pd
@@ -6,7 +11,16 @@ import plotly.graph_objects as go
 
 
 def time_series_chart(df: pd.DataFrame, y_col: str, chart_type: str) -> go.Figure:
-    """Generate a time series chart for the selected variable."""
+    """Generate a time series chart for the selected variable.
+    
+    Args:
+        df: DataFrame with date and value columns
+        y_col: Column name to plot
+        chart_type: Type of chart (line, scatter, or histogram)
+        
+    Returns:
+        Plotly figure object
+    """
     if chart_type == "line":
         fig = px.line(df, x="date", y=y_col, markers=True, template="plotly_white")
     elif chart_type == "scatter":
@@ -23,7 +37,14 @@ def time_series_chart(df: pd.DataFrame, y_col: str, chart_type: str) -> go.Figur
 
 
 def correlation_heatmap(corr_df: pd.DataFrame) -> go.Figure:
-    """Build a heatmap from a correlation matrix."""
+    """Build a heatmap from a correlation matrix.
+    
+    Args:
+        corr_df: Correlation matrix DataFrame
+        
+    Returns:
+        Plotly heatmap figure
+    """
     fig = px.imshow(
         corr_df,
         text_auto=True,
@@ -37,7 +58,16 @@ def correlation_heatmap(corr_df: pd.DataFrame) -> go.Figure:
 
 
 def budget_timeseries_chart(df: pd.DataFrame, y_col: str, chart_type: str) -> go.Figure:
-    """Generate a budget chart for a selected metric over time."""
+    """Generate a budget chart for a selected metric over time.
+    
+    Args:
+        df: DataFrame with date column and budget metrics
+        y_col: Column name to plot (budget variable)
+        chart_type: Type of chart (line, bar, or area)
+        
+    Returns:
+        Plotly figure object with the budget chart
+    """
     if chart_type == "line":
         fig = px.line(df, x="date", y=y_col, markers=True, template="plotly_white")
     elif chart_type == "bar":
@@ -54,11 +84,20 @@ def budget_timeseries_chart(df: pd.DataFrame, y_col: str, chart_type: str) -> go
 
 
 def income_expense_comparison_chart(df: pd.DataFrame) -> go.Figure:
-    """Build a grouped bar chart to compare income vs expenses by month."""
+    """Build a grouped bar chart to compare income vs expenses by month.
+    
+    Args:
+        df: DataFrame with date, Inkomst (income), and Utgifter (expenses) columns
+        
+    Returns:
+        Plotly figure with grouped bar chart, or empty figure if required columns missing
+    """
+    # Check that required columns exist
     required = {"date", "Inkomst", "Utgifter"}
     if not required.issubset(df.columns):
         return go.Figure()
 
+    # Prepare data in tidy format for grouped bar chart
     tidy = df[["date", "Inkomst", "Utgifter"]].copy()
     melted = tidy.melt(id_vars="date", var_name="series", value_name="value")
     fig = px.bar(

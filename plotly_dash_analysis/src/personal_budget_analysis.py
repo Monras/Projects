@@ -1,3 +1,8 @@
+"""Personal budget data processing and analysis.
+
+Handles loading personal budget data from Excel/ODS files, computing derived financial
+metrics (net cashflow, savings rate, etc.), and generating summary statistics.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -5,10 +10,11 @@ from pathlib import Path
 import pandas as pd
 
 
+# Configuration for budget file and sheet names
 RAW_BUDGET_FILE = "Summering Personlig budget.ods"
 RAW_BUDGET_SHEET = "Mitt innehav"
 
-
+# List of liability columns to aggregate for total known liabilities
 LIABILITY_COLUMNS = [
     "Mastercard (swed.)",
     "Studielån (swed.)",
@@ -16,7 +22,21 @@ LIABILITY_COLUMNS = [
 
 
 def load_personal_budget(path: Path | None = None, sheet_name: str = RAW_BUDGET_SHEET) -> pd.DataFrame:
-    """Load the personal budget .ods and convert it into a monthly wide table."""
+    """Load the personal budget .ods and convert it into a monthly wide table.
+    
+    Transforms long-format budget data from ODS file into wide-format with
+    months as rows and budget metrics as columns.
+    
+    Args:
+        path: Optional path to budget file. Uses default if not specified.
+        sheet_name: Name of sheet to load from the file
+        
+    Returns:
+        DataFrame indexed by date with budget metrics as columns
+        
+    Raises:
+        ValueError: If 'Månad' column not found in the file
+    """
     target = path or Path(__file__).resolve().parent.parent / "data" / "raw" / RAW_BUDGET_FILE
 
     raw = pd.read_excel(target, sheet_name=sheet_name)
@@ -39,9 +59,22 @@ def load_personal_budget(path: Path | None = None, sheet_name: str = RAW_BUDGET_
 
 
 def build_derived_budget_series(monthly: pd.DataFrame) -> pd.DataFrame:
-    """Create derived financial series used in reporting."""
+    """Create derived financial series used in reporting.
+    
+    Computes additional financial metrics from base budget columns:
+    - Net cashflow (income - expenses)
+    - Savings rate percentage
+    - Total liabilities aggregation
+    
+    Args:
+        monthly: DataFrame with raw budget metrics
+        
+    Returns:
+        DataFrame with original and derived columns
+    """
     result = monthly.copy()
 
+    # Compute net cashflow if income and expenses are available
     has_income = "Inkomst" in result.columns
     has_expenses = "Utgifter" in result.columns
 
@@ -49,9 +82,11 @@ def build_derived_budget_series(monthly: pd.DataFrame) -> pd.DataFrame:
         result["net_cashflow"] = result["Inkomst"] - result["Utgifter"]
         result["savings_rate_pct"] = (result["net_cashflow"] / result["Inkomst"]).replace([pd.NA], pd.NA) * 100
 
+    # Add net worth proxy if total holdings available
     if "totalt innehav" in result.columns:
         result["net_worth_proxy"] = result["totalt innehav"]
 
+    # Aggregate known liabilities from configured columns
     existing_liabilities = [c for c in LIABILITY_COLUMNS if c in result.columns]
     if existing_liabilities:
         result["known_liabilities"] = result[existing_liabilities].sum(axis=1, min_count=1)
@@ -60,31 +95,50 @@ def build_derived_budget_series(monthly: pd.DataFrame) -> pd.DataFrame:
 
 
 def compute_budget_summary(derived: pd.DataFrame) -> dict[str, float | str]:
-    """Compute core summary metrics for personal budget analysis."""
+    """Compute core summary metrics for personal budget analysis.
+    
+    Extracts latest values and 12-month averages for key budget metrics
+    to display on the dashboard.
+    
+    Args:
+        derived: DataFrame with derived budget series (output from build_derived_budget_series)
+        
+    Returns:
+        Dictionary containing summary metrics for dashboard display
+        
+    Raises:
+        ValueError: If input DataFrame is empty
+    """
     if derived.empty:
         raise ValueError("No usable data points were found in the personal budget dataset.")
 
+    # Initialize summary with date information
     latest_date = derived.index.max()
     summary: dict[str, float | str] = {
         "latest_date": latest_date.strftime("%Y-%m-%d"),
         "months_observed": int(len(derived)),
     }
 
+    # Extract income metrics if available
     if "Inkomst" in derived.columns:
         summary["latest_income"] = float(derived["Inkomst"].dropna().iloc[-1])
         summary["income_12m_avg"] = float(derived["Inkomst"].dropna().tail(12).mean())
 
+    # Extract expense metrics if available
     if "Utgifter" in derived.columns:
         summary["latest_expenses"] = float(derived["Utgifter"].dropna().iloc[-1])
         summary["expenses_12m_avg"] = float(derived["Utgifter"].dropna().tail(12).mean())
 
+    # Extract cashflow metrics if available
     if "net_cashflow" in derived.columns:
         summary["latest_net_cashflow"] = float(derived["net_cashflow"].dropna().iloc[-1])
         summary["net_cashflow_12m_avg"] = float(derived["net_cashflow"].dropna().tail(12).mean())
 
+    # Extract savings rate metrics if available
     if "savings_rate_pct" in derived.columns:
         summary["savings_rate_12m_avg_pct"] = float(derived["savings_rate_pct"].dropna().tail(12).mean())
 
+    # Extract net worth change if sufficient history available (>12 months)
     if "net_worth_proxy" in derived.columns and len(derived["net_worth_proxy"].dropna()) > 12:
         nw = derived["net_worth_proxy"].dropna()
         summary["latest_net_worth_proxy"] = float(nw.iloc[-1])
@@ -94,20 +148,29 @@ def compute_budget_summary(derived: pd.DataFrame) -> dict[str, float | str]:
 
 
 def build_markdown_report(summary: dict[str, float | str]) -> str:
-    """Render a concise markdown report from summary metrics."""
-
+    """Render a concise markdown report from summary metrics.
+    
+    Args:
+        summary: Dictionary of summary metrics from compute_budget_summary
+        
+    Returns:
+        Formatted markdown string with budget analysis report
+    """
+    # Helper to format currency values
     def fmt_currency(key: str) -> str:
         value = summary.get(key)
         if value is None:
             return "n/a"
         return f"{value:,.0f} SEK"
 
+    # Helper to format percentage values
     def fmt_pct(key: str) -> str:
         value = summary.get(key)
         if value is None:
             return "n/a"
         return f"{value:.2f}%"
 
+    # Build markdown report sections
     lines = [
         "# Personal Budget Economic Analysis",
         "",
