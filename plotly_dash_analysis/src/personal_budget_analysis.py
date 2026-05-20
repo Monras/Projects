@@ -1,6 +1,6 @@
 """Personal budget data processing and analysis.
 
-Handles loading personal budget data from Excel/ODS files, computing derived financial
+Handles loading personal budget data from CSV files, computing derived financial
 metrics (net cashflow, savings rate, etc.), and generating summary statistics.
 """
 from __future__ import annotations
@@ -10,55 +10,38 @@ from pathlib import Path
 import pandas as pd
 
 
-# Configuration for budget file and sheet names
-RAW_BUDGET_FILE = "Summering Personlig budget.ods"
-RAW_BUDGET_SHEET = "Mitt innehav"
+# Configuration for budget file
+RAW_BUDGET_FILE = "personal_budget.csv"
 
 # List of liability columns to aggregate for total known liabilities
 LIABILITY_COLUMNS = [
-    "Mastercard (swed.)",
     "Studielån (swed.)",
 ]
 
 
-def load_personal_budget(path: Path | None = None, sheet_name: str = RAW_BUDGET_SHEET) -> pd.DataFrame:
-    """Load the personal budget .ods and convert it into a monthly wide table.
-    
-    Transforms long-format budget data from ODS file into wide-format with
-    months as rows and budget metrics as columns.
+def load_personal_budget(path: Path | None = None) -> pd.DataFrame:
+    """Load the personal budget CSV with months as rows and metrics as columns.
     
     Args:
         path: Optional path to budget file. Uses default if not specified.
-        sheet_name: Name of sheet to load from the file
         
     Returns:
         DataFrame indexed by date with budget metrics as columns
-        
-    Raises:
-        ValueError: If 'Månad' column not found in the file
     """
     target = path or Path(__file__).resolve().parent.parent / "data" / "raw" / RAW_BUDGET_FILE
 
-    raw = pd.read_excel(target, sheet_name=sheet_name)
-    if "Månad" not in raw.columns:
-        raise ValueError("Expected a 'Månad' column in the personal budget file.")
-
-    # Reshape from a metric-by-month sheet to a long table: metric, date, value.
-    long_df = raw.rename(columns={"Månad": "metric"}).melt(
-        id_vars="metric",
-        var_name="date",
-        value_name="value",
-    )
-
-    # Coerce invalid values and drop incomplete rows before building time series.
-    long_df["date"] = pd.to_datetime(long_df["date"], errors="coerce")
-    long_df["value"] = pd.to_numeric(long_df["value"], errors="coerce")
-    long_df = long_df.dropna(subset=["date", "value"])
-
-    # Pivot into a monthly wide format where each column is a financial metric.
-    monthly = long_df.pivot_table(index="date", columns="metric", values="value", aggfunc="last").sort_index()
-    monthly.columns.name = None
-    return monthly
+    # Read CSV with first column as index (dates)
+    df = pd.read_csv(target, index_col=0)
+    
+    # Convert index to datetime
+    df.index = pd.to_datetime(df.index, errors="coerce")
+    df = df.dropna(how="all")  # Remove rows that are all NaN
+    
+    # Ensure all values are numeric
+    for col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    
+    return df.sort_index()
 
 
 def build_derived_budget_series(monthly: pd.DataFrame) -> pd.DataFrame:

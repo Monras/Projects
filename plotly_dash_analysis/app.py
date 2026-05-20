@@ -7,11 +7,15 @@ multiple visualization types (line, bar, area charts).
 from __future__ import annotations
 
 import os
+from datetime import datetime
+from pathlib import Path
 
-from dash import Dash, Input, Output, dcc, html
+from dash import Dash, Input, Output, State, dcc, html, callback, ALL
+import pandas as pd
 
 from src.charts import budget_timeseries_chart, income_expense_comparison_chart
 from src.personal_budget_analysis import (
+    RAW_BUDGET_FILE,
     build_derived_budget_series,
     compute_budget_summary,
     load_personal_budget,
@@ -26,7 +30,7 @@ budget_variable_options: list[dict[str, str]] = []  # Available budget variables
 
 # Attempt to load and process personal budget data
 try:
-    budget_monthly = load_personal_budget().reset_index()
+    budget_monthly = load_personal_budget().reset_index().rename(columns={"index": "date"})
     budget_derived = build_derived_budget_series(budget_monthly)
     budget_summary = compute_budget_summary(budget_derived.set_index("date"))
     budget_chart_df = budget_derived
@@ -35,10 +39,10 @@ try:
     candidate_budget_vars = [
         "Inkomst",
         "Utgifter",
-        "net_cashflow",
-        "Sparande",
-        "totalt innehav",
-        "known_liabilities",
+        "Sparkonto (swed.)",
+        "Mastercard (swed.)",
+        "Aktier/Fonder (Avanza)",      
+        "SBAB",    
     ]
     # Build dropdown options from available columns
     budget_variable_options = [
@@ -170,9 +174,79 @@ app.layout = html.Div(
                 ),
             ],
         ),
+        html.Section(
+            className="new-entry-section",
+            children=[
+                html.H2("Add New Month Entry"),
+                html.P("Enter budget data for a new month. This will be saved to the raw data file."),
+                html.Div(
+                    className="entry-form",
+                    children=[
+                        html.Div([
+                            html.Label("Month (YYYY-MM format)"),
+                            dcc.Input(
+                                id="new-month-input",
+                                type="text",
+                                placeholder=datetime.now().strftime("%Y-%m"),
+                                style={"width": "100%", "padding": "8px", "marginBottom": "10px"},
+                            ),
+                        ]),
+                        html.Div(
+                            id="metric-inputs-container",
+                            children=(
+                                [
+                                    html.Div([
+                                        html.Label(col),
+                                        dcc.Input(
+                                            id={"type": "metric-input", "index": col},
+                                            type="number",
+                                            placeholder="0",
+                                            step=1000,
+                                            style={"width": "100%", "padding": "8px", "marginBottom": "10px"},
+                                        ),
+                                    ])
+                                    for col in candidate_budget_vars
+                                                                ]
+                                if budget_available
+                                else [html.P("No budget metrics available")]
+                            ),
+                        ),
+                                html.Div([
+                                    html.Label("Kommentarer"),
+                                    dcc.Input(
+                                        id={"type": "metric-input", "index": "Kommentarer"},
+                                        type="text",
+                                        placeholder="Lägg till kommentarer om denna månad",
+                                        style={"width": "100%", "padding": "8px", "marginBottom": "10px"},
+                                    ),
+                                ]),
+                      
+                        
+                        html.Button(
+                            "Save Entry",
+                            id="submit-entry-button",
+                            n_clicks=0,
+                            style={
+                                "padding": "10px 20px",
+                                "backgroundColor": "#007bff",
+                                "color": "white",
+                                "border": "none",
+                                "borderRadius": "4px",
+                                "cursor": "pointer",
+                            },
+                        ),
+                    ],
+                    style={"border": "1px solid #ddd", "padding": "20px", "borderRadius": "4px"},
+                ),
+                html.Div(
+                    id="entry-message",
+                    style={"marginTop": "20px", "padding": "10px", "borderRadius": "4px"},
+                ),
+            ],
+            style={"marginTop": "40px", "maxWidth": "600px"},
+        ),
     ],
-)
-
+)       
 
 # Callback to update the main budget chart when user changes variable or chart type
 @app.callback(
@@ -205,11 +279,88 @@ def update_budget_chart(selected_variable: str | None, selected_chart_type: str)
     return budget_timeseries_chart(budget_chart_df, selected_variable, selected_chart_type)
 
 
+# Callback to handle new entry submission
+@app.callback(
+    Output("entry-message", "children"),
+    Output("entry-message", "style"),
+    Input("submit-entry-button", "n_clicks"),
+    State("new-month-input", "value"),
+    State({"type": "metric-input", "index": ALL}, "value"),
+    prevent_initial_call=True,
+)
+def save_new_entry(n_clicks: int, month_str: str, metric_values: list) -> tuple[str, dict]:
+    """Save a new budget entry to the raw CSV file.
+    
+    Args:
+        n_clicks: Number of times the button was clicked
+        month_str: Month string in YYYY-MM format
+        metric_values: List of values for each metric
+        
+    Returns:
+        Tuple of (message text, style dict for success/error display)
+    """
+    if not month_str or not metric_values:
+        return "Please fill in all fields", {
+            "marginTop": "20px",
+            "padding": "10px",
+            "borderRadius": "4px",
+            "backgroundColor": "#f8d7da",
+            "color": "#721c24",
+        }
+
+    try:
+        # Parse the month string
+        month_date = pd.to_datetime(month_str)
+        
+        # Load the raw CSV file
+        raw_file_path = Path(__file__).resolve().parent / "data" / "raw" / RAW_BUDGET_FILE
+        raw_df = pd.read_csv(raw_file_path)
+        
+        # Create a new row with the entered values
+        new_row_data = {"Månad": month_date.strftime("%Y-%m")}
+        
+        # Get the metric names from the stored candidate_budget_vars (in the same order as metric_values)
+        for i, col in enumerate(candidate_budget_vars):
+            if i < len(metric_values) and metric_values[i] is not None:
+                new_row_data[col] = float(metric_values[i])
+        
+        # Append the new row
+        new_row_df = pd.DataFrame([new_row_data])
+        updated_df = pd.concat([raw_df, new_row_df], ignore_index=True)
+        
+        # Save back to the CSV file
+        updated_df.to_csv(raw_file_path, index=False)
+        
+        return (
+            f"✓ Successfully saved entry for {month_str}. Run analyze_personal_budget.py to update processed data.",
+            {
+                "marginTop": "20px",
+                "padding": "10px",
+                "borderRadius": "4px",
+                "backgroundColor": "#d4edda",
+                "color": "#155724",
+            },
+        )
+    except Exception as e:
+        return (
+            f"✗ Error saving entry: {str(e)}",
+            {
+                "marginTop": "20px",
+                "padding": "10px",
+                "borderRadius": "4px",
+                "backgroundColor": "#f8d7da",
+                "color": "#721c24",
+            },
+        )
+
+
 # Run the Dash application with environment-based configuration
 if __name__ == "__main__":
-    # Debug mode, host, and port can be configured via environment variables
+    # Debug mode enables hot reloading when source files change
+    # Host and port can be configured via environment variables
     app.run(
-        debug=os.getenv("DASH_DEBUG", "false").lower() == "true",
-        host=os.getenv("DASH_HOST", "0.0.0.0"),
+        debug=True,
+        host=os.getenv("DASH_HOST", "127.0.0.1"),
         port=int(os.getenv("DASH_PORT", "8050")),
+        dev_tools_hot_reload=True,
     )

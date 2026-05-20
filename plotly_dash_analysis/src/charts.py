@@ -61,7 +61,7 @@ def budget_timeseries_chart(df: pd.DataFrame, y_col: str, chart_type: str) -> go
     """Generate a budget chart for a selected metric over time.
     
     Args:
-        df: DataFrame with date column and budget metrics
+        df: DataFrame with date column and budget metrics as columns
         y_col: Column name to plot (budget variable)
         chart_type: Type of chart (line, bar, or area)
         
@@ -87,13 +87,13 @@ def income_expense_comparison_chart(df: pd.DataFrame) -> go.Figure:
     """Build a grouped bar chart to compare income vs expenses by month.
     
     Args:
-        df: DataFrame with date, Inkomst (income), and Utgifter (expenses) columns
+        df: DataFrame with date column and budget metrics as columns
         
     Returns:
         Plotly figure with grouped bar chart, or empty figure if required columns missing
     """
     # Check that required columns exist
-    required = {"date", "Inkomst", "Utgifter"}
+    required = {"Inkomst", "Utgifter"}
     if not required.issubset(df.columns):
         return go.Figure()
 
