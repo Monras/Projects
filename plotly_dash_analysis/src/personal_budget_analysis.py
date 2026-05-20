@@ -43,16 +43,19 @@ def load_personal_budget(path: Path | None = None, sheet_name: str = RAW_BUDGET_
     if "Månad" not in raw.columns:
         raise ValueError("Expected a 'Månad' column in the personal budget file.")
 
+    # Reshape from a metric-by-month sheet to a long table: metric, date, value.
     long_df = raw.rename(columns={"Månad": "metric"}).melt(
         id_vars="metric",
         var_name="date",
         value_name="value",
     )
 
+    # Coerce invalid values and drop incomplete rows before building time series.
     long_df["date"] = pd.to_datetime(long_df["date"], errors="coerce")
     long_df["value"] = pd.to_numeric(long_df["value"], errors="coerce")
     long_df = long_df.dropna(subset=["date", "value"])
 
+    # Pivot into a monthly wide format where each column is a financial metric.
     monthly = long_df.pivot_table(index="date", columns="metric", values="value", aggfunc="last").sort_index()
     monthly.columns.name = None
     return monthly
@@ -78,6 +81,7 @@ def build_derived_budget_series(monthly: pd.DataFrame) -> pd.DataFrame:
     has_income = "Inkomst" in result.columns
     has_expenses = "Utgifter" in result.columns
 
+    # Compute cashflow and savings rate only when both inputs exist.
     if has_income and has_expenses:
         result["net_cashflow"] = result["Inkomst"] - result["Utgifter"]
         result["savings_rate_pct"] = (result["net_cashflow"] / result["Inkomst"]).replace([pd.NA], pd.NA) * 100
@@ -158,6 +162,7 @@ def build_markdown_report(summary: dict[str, float | str]) -> str:
     """
     # Helper to format currency values
     def fmt_currency(key: str) -> str:
+        # Keep report generation resilient when a metric is unavailable.
         value = summary.get(key)
         if value is None:
             return "n/a"
