@@ -3,30 +3,21 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Packaging/build artifacts
-*.egg-info/
-build/
-dist/
-
 # Virtual environments
 .venv/
 venv/
 env/
 ENV/
+projenv/
 
 # Environment files
 .env
 .env.*
 
-# Notebook artifacts
+# Jupyter
 .ipynb_checkpoints/
 
-# Test and tool caches
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# OS/editor files
+# OS/editor noise
 .DS_Store
 .vscode/
 .idea/
