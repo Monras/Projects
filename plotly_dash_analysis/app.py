@@ -30,10 +30,13 @@ budget_variable_options: list[dict[str, str]] = []  # Available budget variables
 
 # Attempt to load and process personal budget data
 try:
-    budget_monthly = load_personal_budget().reset_index().rename(columns={"index": "date"})
+    budget_monthly = load_personal_budget()
     budget_derived = build_derived_budget_series(budget_monthly)
-    budget_summary = compute_budget_summary(budget_derived.set_index("date"))
-    budget_chart_df = budget_derived
+    budget_summary = compute_budget_summary(budget_derived)
+    budget_chart_df = budget_derived.reset_index()
+    # Rename the index column to "date" - the index name comes from the CSV's first column
+    if budget_chart_df.columns[0] != "date":
+        budget_chart_df = budget_chart_df.rename(columns={budget_chart_df.columns[0]: "date"})
 
     # Define available budget metrics for visualization
     candidate_budget_vars = [
