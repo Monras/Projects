@@ -33,11 +33,11 @@ try:
 
     # Define available budget metrics for visualization
     candidate_budget_vars = [
+        "totalt innehav",   
+        "Sparande",
         "Inkomst",
         "Utgifter",
         "net_cashflow",
-        "Sparande",
-        "totalt innehav",
         "known_liabilities",
     ]
     # Build dropdown options from available columns
@@ -150,8 +150,8 @@ app.layout = html.Div(
                     dcc.RadioItems(
                         id="budget-chart-type-radio",
                         options=budget_chart_type_options,
-                        value="line",
-                        inline=True,
+                        value="area",
+                        inline=True,    
                     ),
                 ]),
             ],
@@ -209,7 +209,7 @@ def update_budget_chart(selected_variable: str | None, selected_chart_type: str)
 if __name__ == "__main__":
     # Debug mode, host, and port can be configured via environment variables
     app.run(
-        debug=os.getenv("DASH_DEBUG", "false").lower() == "true",
+        debug=os.getenv("DASH_DEBUG", "true").lower() == "true",
         host=os.getenv("DASH_HOST", "0.0.0.0"),
         port=int(os.getenv("DASH_PORT", "8050")),
     )
